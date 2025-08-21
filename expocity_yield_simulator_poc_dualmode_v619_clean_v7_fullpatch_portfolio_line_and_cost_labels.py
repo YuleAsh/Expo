@@ -7,7 +7,7 @@ from copy import deepcopy
 from datetime import date, timedelta
 
 st.set_page_config(page_title="Expo City Yield Optimizer", layout="wide")
-st.title("🏙️ Expo‑city Yield Optimizer")
+st.title("🏙️ Expo City Yield Optimizer")
 
 YEARS = [2024, 2025, 2026, 2027, 2028, 2029]
 def _fy_label(year:int)->str: return f"FY{str(year)[-2:]}"
