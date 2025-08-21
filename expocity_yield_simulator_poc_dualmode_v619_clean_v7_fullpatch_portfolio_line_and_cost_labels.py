@@ -6,7 +6,7 @@ import plotly.graph_objects as go
 from copy import deepcopy
 from datetime import date, timedelta
 
-st.set_page_config(page_title="Expo‑city Yield Optimizer", layout="wide")
+st.set_page_config(page_title="Expo City Yield Optimizer", layout="wide")
 st.title("🏙️ Expo‑city Yield Optimizer")
 
 YEARS = [2024, 2025, 2026, 2027, 2028, 2029]
