@@ -550,6 +550,153 @@ if mode == "Macro (Footfall & costs)":
         port_cagr_focus = cagr(total_rev[focus_idx], total_rev[-1], max(1, (len(YEARS)-1-focus_idx)))
 
 
+        # >>> PORTFOLIO_CHARTS_BEGIN
+
+
+        def __render_portfolio_charts_once():
+
+
+            if st.session_state.get("_portfolio_charts_done", False):
+
+
+                return
+
+
+            st.session_state["_portfolio_charts_done"] = True
+
+
+
+            ph = st.empty()
+
+
+            with ph.container():
+
+
+                col1, col2 = st.columns(2)
+
+
+                with col1:
+
+
+                    st.markdown("### Profit each year + cumulative (Portfolio)")
+
+
+                    profit_arr = (np.array(total_rev) - np.array(total_exp)).tolist()
+
+
+                    cum_profit_arr = np.cumsum(profit_arr)
+
+
+                    figPF_port = go.Figure()
+
+
+                    figPF_port.add_trace(go.Bar(
+
+
+                        x=YEARS, y=profit_arr, name="YoY profit",
+
+
+                        hovertemplate="Year %{x}<br>Profit: %{y:,.0f} AED<extra></extra>"
+
+
+                    ))
+
+
+                    figPF_port.add_trace(go.Scatter(
+
+
+                        x=YEARS, y=cum_profit_arr, name="Cumulative profit", mode="lines+text",
+
+
+                        text=[f"{int(v):,}" for v in cum_profit_arr], textposition="top center"
+
+
+                    ))
+
+
+                    _ptop = max(float(max(profit_arr)), float(max(cum_profit_arr))) if len(profit_arr) else 0.0
+
+
+                    _pmin = min(0.0, min(profit_arr)) if len(profit_arr) else 0.0
+
+
+                    figPF_port.update_layout(height=380, yaxis_title="AED", margin=dict(t=80))
+
+
+                    figPF_port.update_yaxes(range=[_pmin * 1.2 if _pmin < 0 else 0, _ptop * 1.22 if _ptop else 1])
+
+
+                    if 'add_fy24_shading' in globals():
+
+
+                        add_fy24_shading(figPF_port, st.session_state.get("lock_fy24", True))
+
+
+                    st.plotly_chart(figPF_port, use_container_width=True)
+
+
+
+                with col2:
+
+
+                    st.markdown("### Operating costs (AED) — Portfolio")
+
+
+                    figET_port = go.Figure()
+
+
+                    figET_port.add_trace(go.Bar(
+
+
+                        x=YEARS, y=total_exp, name="Costs",
+
+
+                        text=[f"{int(v):,}" for v in total_exp], textposition="outside", texttemplate="%{text}",
+
+
+                        customdata=np.array(lock_labels_p)[:, None] if 'lock_labels_p' in globals() else None,
+
+
+                        hovertemplate="Year %{x}<br>Costs: %{y:,.0f} AED<extra></extra>"
+
+
+                    ))
+
+
+                    _etop = float(max(total_exp)) * 1.22 if len(total_exp) else 1.0
+
+
+                    figET_port.update_layout(height=380, yaxis_title="AED", showlegend=False, margin=dict(t=80))
+
+
+                    figET_port.update_yaxes(range=[0, _etop])
+
+
+                    if 'add_fy24_shading' in globals():
+
+
+                        add_fy24_shading(figET_port, st.session_state.get("lock_fy24", True))
+
+
+                    st.plotly_chart(figET_port, use_container_width=True)
+
+
+
+        try:
+
+
+            __render_portfolio_charts_once()
+
+
+        except Exception as _e:
+
+
+            st.warning(f"Portfolio charts could not be rendered: {_e}")
+
+
+        # <<< PORTFOLIO_CHARTS_END
+
+
         st.markdown("### Per‑tenant settings & KPIs")
         pt_df = pd.DataFrame(rows)
         pt_df = pt_df[["Tenant", "Category", "RF (mo)", "Property value (AED)", "FY24 revenue (AED)", "FY24 costs (AED)", "FY24 yield %", "Store sales FY24 (AED)", "Turnover on sales %", "YoY revenue growth %"]]
@@ -834,80 +981,162 @@ else:
     c4.metric(f"Annual growth rate ({focus_lbl}→FY29)",
               f"{(cagr(revenue[focus_idx], revenue[-1], max(1,(len(YEARS)-1-focus_idx)))*100):.1f}%")
 
-    st.markdown("### Revenue mix: lease vs turnover — exact (with costs & breakeven)")
-    fig1 = go.Figure()
-    lock_labels = hover_lock_labels(revenue, lock_fy24)
-    fig1.add_trace(go.Bar(x=YEARS, y=lease_rental, name="Lease rental income",
-                          customdata=np.array(lock_labels)[:,None],
-                          hovertemplate="Year %{x}<br>Lease rent: %{y:,.0f} AED<br>%{customdata[0]}<extra></extra>"))
-    fig1.add_trace(go.Bar(x=YEARS, y=turnover_rev, name="Turnover revenue",
-                          customdata=np.array(lock_labels)[:,None],
-                          hovertemplate="Year %{x}<br>Turnover: %{y:,.0f} AED<br>%{customdata[0]}<extra></extra>"))
-    fig1.add_trace(go.Scatter(x=YEARS, y=revenue, name="Total revenue", mode="lines",
-                              customdata=np.array(lock_labels)[:,None],
-                              hovertemplate="Year %{x}<br>Total revenue: %{y:,.0f} AED<br>%{customdata[0]}<extra></extra>"))
-    fig1.add_trace(go.Scatter(x=YEARS, y=expenses, name="Costs", mode="lines",
-                              customdata=np.array(lock_labels)[:,None],
-                              hovertemplate="Year %{x}<br>Costs: %{y:,.0f} AED<br>%{customdata[0]}<extra></extra>"))
-    be = compute_breakeven_point(revenue, expenses, YEARS)
-    if be:
-        fig1.add_trace(go.Scatter(x=[be["x"]], y=[be["y"]], mode="markers+text", marker=dict(color="red", size=12),
-                                  text=[f"BE {be['fy']}"], textposition="top center",
-                                  hovertemplate="Breakeven at %{customdata[0]}<br>%{customdata[1]}: %{customdata[2]:.2f} of year<br>Revenue = Costs = %{y:,.0f} AED<extra></extra>",
-                                  customdata=[[be["date"], be["fy"], be["t"]]], name="Breakeven", showlegend=True, line=dict(width=0)))
-    fig1.update_layout(barmode="stack", height=380, yaxis_title="AED", margin=dict(t=60))
-    add_fy24_shading(fig1, lock_fy24)
-    st.plotly_chart(fig1, use_container_width=True)
+    # >>> FS_EXACT_SECTION_BEGIN
 
-    # Revenue each year + cumulative — exact
-    st.markdown("### Revenue each year + cumulative — exact")
-    cum_rev = np.cumsum(revenue)
-    lock_labels2 = hover_lock_labels(revenue, lock_fy24) if 'hover_lock_labels' in globals() else [""]*len(YEARS)
-    fig2 = go.Figure()
-    fig2.add_trace(go.Bar(
-        x=YEARS, y=revenue, name="Revenue (AED)",
-        text=[f"{int(v):,}" for v in revenue], textposition="outside",
-        customdata=np.array(lock_labels2)[:, None],
-        hovertemplate="Year %{x}<br>Revenue: %{y:,.0f} AED<br>%{customdata[0]}<extra></extra>"
-    ))
-    fig2.add_trace(go.Scatter(
-        x=YEARS, y=cum_rev, name="Cumulative (AED)",
-        mode="lines", yaxis="y2"
-    ))
-    ymax2 = float(np.nanmax(revenue)) * 1.25
-    fig2.update_layout(
-        height=360, margin=dict(t=60),
-        yaxis=dict(title="AED", range=[0, ymax2]),
-        yaxis2=dict(title="Cumulative", overlaying="y", side="right")
-    )
-    add_fy24_shading(fig2, lock_fy24) if 'add_fy24_shading' in globals() else None
-    st.plotly_chart(fig2, use_container_width=True, key="fs_rev_cum")
+    def __render_fs_exact_trio():
 
-    # Costs & commercial yield — exact
-    st.markdown("### Costs & commercial yield — exact")
-    lock_labels3 = hover_lock_labels(expenses, lock_fy24) if 'hover_lock_labels' in globals() else [""]*len(YEARS)
-    fig3p = go.Figure()
-    fig3p.add_trace(go.Bar(
-        x=YEARS, y=expenses, name="Costs (AED)",
-        text=[f"{int(v):,}" for v in expenses], textposition="outside",
-        customdata=np.array(lock_labels3)[:, None],
-        hovertemplate="Year %{x}<br>Costs: %{y:,.0f} AED<br>%{customdata[0]}<extra></extra>"
-    ))
-    fig3p.add_trace(go.Scatter(
-        x=YEARS, y=workbook_yield, name="Commercial yield % (workbook)",
-        mode="lines", yaxis="y2"
-    ))
-    ymax3 = float(np.nanmax(expenses)) * 1.25
-    fig3p.update_layout(
-        height=360, margin=dict(t=60),
-        yaxis=dict(title="AED", range=[0, ymax3]),
-        yaxis2=dict(title="Yield %", overlaying="y", side="right",
-                    range=[0, 125], tickmode="linear", dtick=25, ticksuffix="%")
-    )
-    add_fy24_shading(fig3p, lock_fy24) if 'add_fy24_shading' in globals() else None
-    st.plotly_chart(fig3p, use_container_width=True, key="fs_costs_yield")
+
+            st.markdown("### Revenue mix: lease vs turnover — exact (with costs & breakeven)")
+
+            fig1 = go.Figure()
+
+            lock_labels = hover_lock_labels(revenue, lock_fy24)
+
+            fig1.add_trace(go.Bar(x=YEARS, y=lease_rental, name="Lease rental income",
+
+                                  customdata=np.array(lock_labels)[:,None],
+
+                                  hovertemplate="Year %{x}<br>Lease rent: %{y:,.0f} AED<br>%{customdata[0]}<extra></extra>"))
+
+            fig1.add_trace(go.Bar(x=YEARS, y=turnover_rev, name="Turnover revenue",
+
+                                  customdata=np.array(lock_labels)[:,None],
+
+                                  hovertemplate="Year %{x}<br>Turnover: %{y:,.0f} AED<br>%{customdata[0]}<extra></extra>"))
+
+            fig1.add_trace(go.Scatter(x=YEARS, y=revenue, name="Total revenue", mode="lines",
+
+                                      customdata=np.array(lock_labels)[:,None],
+
+                                      hovertemplate="Year %{x}<br>Total revenue: %{y:,.0f} AED<br>%{customdata[0]}<extra></extra>"))
+
+            fig1.add_trace(go.Scatter(x=YEARS, y=expenses, name="Costs", mode="lines",
+
+                                      customdata=np.array(lock_labels)[:,None],
+
+                                      hovertemplate="Year %{x}<br>Costs: %{y:,.0f} AED<br>%{customdata[0]}<extra></extra>"))
+
+            be = compute_breakeven_point(revenue, expenses, YEARS)
+
+            if be:
+
+                fig1.add_trace(go.Scatter(x=[be["x"]], y=[be["y"]], mode="markers+text", marker=dict(color="red", size=12),
+
+                                          text=[f"BE {be['fy']}"], textposition="top center",
+
+                                          hovertemplate="Breakeven at %{customdata[0]}<br>%{customdata[1]}: %{customdata[2]:.2f} of year<br>Revenue = Costs = %{y:,.0f} AED<extra></extra>",
+
+                                          customdata=[[be["date"], be["fy"], be["t"]]], name="Breakeven", showlegend=True, line=dict(width=0)))
+
+            fig1.update_layout(barmode="stack", height=380, yaxis_title="AED", margin=dict(t=60))
+
+            add_fy24_shading(fig1, lock_fy24)
+
+            st.plotly_chart(fig1, use_container_width=True)
+
+
+            # Revenue each year + cumulative — exact
+
+            st.markdown("### Revenue each year + cumulative — exact")
+
+            cum_rev = np.cumsum(revenue)
+
+            lock_labels2 = hover_lock_labels(revenue, lock_fy24) if 'hover_lock_labels' in globals() else [""]*len(YEARS)
+
+            fig2 = go.Figure()
+
+            fig2.add_trace(go.Bar(
+
+                x=YEARS, y=revenue, name="Revenue (AED)",
+
+                text=[f"{int(v):,}" for v in revenue], textposition="outside",
+
+                customdata=np.array(lock_labels2)[:, None],
+
+                hovertemplate="Year %{x}<br>Revenue: %{y:,.0f} AED<br>%{customdata[0]}<extra></extra>"
+
+            ))
+
+            fig2.add_trace(go.Scatter(
+
+                x=YEARS, y=cum_rev, name="Cumulative (AED)",
+
+                mode="lines", yaxis="y2"
+
+            ))
+
+            ymax2 = float(np.nanmax(revenue)) * 1.25
+
+            fig2.update_layout(
+
+                height=360, margin=dict(t=60),
+
+                yaxis=dict(title="AED", range=[0, ymax2]),
+
+                yaxis2=dict(title="Cumulative", overlaying="y", side="right")
+
+            )
+
+            add_fy24_shading(fig2, lock_fy24) if 'add_fy24_shading' in globals() else None
+
+            st.plotly_chart(fig2, use_container_width=True, key="fs_rev_cum")
+
+
+            # Costs & commercial yield — exact
+
+            st.markdown("### Costs & commercial yield — exact")
+
+            lock_labels3 = hover_lock_labels(expenses, lock_fy24) if 'hover_lock_labels' in globals() else [""]*len(YEARS)
+
+            fig3p = go.Figure()
+
+            fig3p.add_trace(go.Bar(
+
+                x=YEARS, y=expenses, name="Costs (AED)",
+
+                text=[f"{int(v):,}" for v in expenses], textposition="outside",
+
+                customdata=np.array(lock_labels3)[:, None],
+
+                hovertemplate="Year %{x}<br>Costs: %{y:,.0f} AED<br>%{customdata[0]}<extra></extra>"
+
+            ))
+
+            fig3p.add_trace(go.Scatter(
+
+                x=YEARS, y=workbook_yield, name="Commercial yield % (workbook)",
+
+                mode="lines", yaxis="y2"
+
+            ))
+
+            ymax3 = float(np.nanmax(expenses)) * 1.25
+
+            fig3p.update_layout(
+
+                height=360, margin=dict(t=60),
+
+                yaxis=dict(title="AED", range=[0, ymax3]),
+
+                yaxis2=dict(title="Yield %", overlaying="y", side="right",
+
+                            range=[0, 125], tickmode="linear", dtick=25, ticksuffix="%")
+
+            )
+
+            add_fy24_shading(fig3p, lock_fy24) if 'add_fy24_shading' in globals() else None
+
+            st.plotly_chart(fig3p, use_container_width=True, key="fs_costs_yield")
 
 
     
 
+
+    if not st.session_state.get("_fs_exact_rendered", False):
+
+        __render_fs_exact_trio()
+
+        st.session_state["_fs_exact_rendered"] = True
+
+    # <<< FS_EXACT_SECTION_END
 pass
